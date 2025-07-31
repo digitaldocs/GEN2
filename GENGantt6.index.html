@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive GEN Project Milestones</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chosen Palette: Soft Blues, Purples, Greens, Oranges with Grays and Whites -->
+    <!-- Application Structure Plan: The application uses a dashboard-style layout. The primary navigation is a set of four buttons for the main project phases (Setup, Design & Build, Integration, Expansion). This allows for high-level filtering. Below this, an interactive Gantt chart, built with HTML/CSS, visually represents the project timeline. Clicking a milestone bar on the chart updates a dedicated "Details" section below. This structure was chosen to allow users to move from a broad overview (the full timeline) to a filtered view (by phase) and then to a detailed view (a specific milestone) seamlessly, all on one screen. This is more intuitive and engaging than a static, linear document. -->
+    <!-- Visualization & Content Choices: 
+        - Project Phases: Report Info -> 4 main project phases. Goal -> Navigation/Organization. Viz -> Interactive Buttons. Interaction -> Filter Gantt chart. Justification -> Provides clear, high-level entry points into the timeline. Method -> HTML/Tailwind/JS.
+        - Project Timeline: Report Info -> Gantt Chart Image & Milestone Dates. Goal -> Show change over time and relationships. Viz -> Custom Interactive Gantt Chart. Interaction -> Click milestone to show details. Justification -> Recreating the Gantt chart interactively is far more engaging than a static image and serves as the core exploratory tool. Method -> HTML/CSS/JS.
+        - Milestone Details: Report Info -> Planned Achievements & Key Activities for each of the 7 milestones. Goal -> Inform. Viz -> Dynamic Text Block. Interaction -> Content updates on milestone click. Justification -> Keeps the UI clean by only showing details for the selected item, preventing information overload. Method -> HTML/JS.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        .gantt-grid {
+            display: grid;
+            grid-template-columns: 150px 1fr;
+            overflow-x: auto;
+        }
+        .gantt-chart-container {
+            position: relative;
+            display: grid;
+            grid-template-columns: repeat(17, minmax(100px, 1fr));
+            border-left: 1px solid #e2e8f0;
+        }
+        .gantt-bar {
+            transition: all 0.3s ease;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .gantt-bar:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+        }
+        .gantt-bar.active {
+            border: 3px solid var(--active-border-color, #1e40af);
+            box-shadow: 0 8px 25px rgba(30, 64, 175, 0.4);
+            z-index: 5;
+        }
+        .phase-btn.active {
+            background-color: #2563eb;
+            color: white;
+            box-shadow: 0 4px 10px rgba(37, 99, 235, 0.3);
+        }
+        .timeline-marker {
+            position: absolute;
+            height: 100%;
+            border-left: 2px solid #ef4444;
+            z-index: 10;
+        }
+        .timeline-label {
+            position: absolute;
+            top: -25px;
+            transform: translateX(-50%);
+            background-color: #ef4444;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .llm-button {
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .llm-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="container mx-auto p-6 md:p-10">
+        <header class="text-center mb-10">
+            <h1 class="text-3xl md:text-5xl font-extrabold text-gray-900 leading-tight">GEN Project Interactive Milestones</h1>
+            <p class="text-gray-600 mt-3 text-lg">Explore the project timeline and gain deeper insights into each milestone.</p>
+        </header>
+
+        <main>
+            <section id="phase-navigation" class="mb-8">
+                 <div class="flex flex-wrap justify-center gap-3 md:gap-5">
+                    <button class="phase-btn px-6 py-3 bg-white border border-gray-200 rounded-full font-semibold text-gray-700 hover:bg-gray-100 transition duration-300 shadow-sm" data-phase="All">All Phases</button>
+                    <button class="phase-btn px-6 py-3 bg-white border border-gray-200 rounded-full font-semibold text-gray-700 hover:bg-gray-100 transition duration-300 shadow-sm" data-phase="Setup">Setup</button>
+                    <button class="phase-btn px-6 py-3 bg-white border border-gray-200 rounded-full font-semibold text-gray-700 hover:bg-gray-100 transition duration-300 shadow-sm" data-phase="Design & Build">Design & Build</button>
+                    <button class="phase-btn px-6 py-3 bg-white border border-gray-200 rounded-full font-semibold text-gray-700 hover:bg-gray-100 transition duration-300 shadow-sm" data-phase="Integration">Integration</button>
+                    <button class="phase-btn px-6 py-3 bg-white border border-gray-200 rounded-full font-semibold text-gray-700 hover:bg-gray-100 transition duration-300 shadow-sm" data-phase="Expansion">Expansion</button>
+                </div>
+            </section>
+
+            <section id="gantt-chart-section" class="bg-white p-5 sm:p-8 rounded-xl shadow-lg mb-10">
+                <h2 class="text-2xl font-bold text-gray-900 mb-6">Project Timeline Overview</h2>
+                <div class="gantt-grid">
+                    <div id="gantt-labels" class="pr-5 border-r border-gray-200 flex flex-col justify-around"></div>
+                    <div class="relative overflow-x-auto">
+                        <div id="gantt-chart-header" class="sticky top-0 z-10 bg-white grid grid-cols-17 py-2 border-b border-gray-200" style="grid-template-columns: repeat(17, minmax(100px, 1fr));"></div>
+                        <div id="gantt-chart-container" class="gantt-chart-container py-4"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="milestone-details-section" class="bg-white p-8 md:p-10 rounded-xl shadow-lg min-h-[350px] flex flex-col justify-center">
+                 <div id="milestone-details-content" class="hidden">
+                    <h2 id="details-title" class="text-3xl font-bold text-gray-900 mb-3"></h2>
+                    <p id="details-dates" class="text-base font-medium text-blue-600 mb-5"></p>
+                    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-5 rounded-r-lg mb-7">
+                        <h3 class="font-semibold text-gray-800 text-lg mb-2">Planned Achievement</h3>
+                        <p id="details-achievement" class="text-gray-700 leading-relaxed"></p>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-gray-800 text-lg mb-3" id="activities-schedule-title">Detailed Schedule</h3>
+                        <ul id="details-activities" class="list-disc list-inside space-y-2 text-gray-600 pl-4"></ul>
+                    </div>
+                    <div id="llm-buttons-container" class="mt-8 flex flex-wrap gap-3">
+                        <button id="elaborate-milestone-btn" class="llm-button px-6 py-3 bg-blue-600 text-white rounded-full font-semibold hover:bg-blue-700 transition duration-300 flex items-center justify-center">
+                            <span class="mr-2">✨</span> Elaborate on Milestone
+                        </button>
+                        <button id="identify-risks-btn" class="llm-button px-6 py-3 bg-red-600 text-white rounded-full font-semibold hover:bg-red-700 transition duration-300 flex items-center justify-center">
+                            <span class="mr-2">⚠️</span> Identify Risks
+                        </button>
+                    </div>
+                    <div id="llm-output-container" class="mt-8 p-6 bg-gray-100 rounded-lg border border-gray-200 hidden">
+                        <p id="llm-output-text" class="text-gray-700 leading-relaxed"></p>
+                        <div id="llm-loading-indicator" class="hidden flex items-center justify-center py-6">
+                            <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-400"></div>
+                            <span class="ml-4 text-gray-500 text-lg">Generating insights...</span>
+                        </div>
+                    </div>
+                 </div>
+                 <div id="milestone-placeholder" class="flex items-center justify-center h-full text-gray-500 text-lg text-center p-8">
+                    <p>Select a milestone from the chart above to view its details and generate AI-powered insights.</p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const milestonesData = [
+            {
+                id: 1,
+                name: "Project Setup and Governance",
+                phase: "Setup",
+                start: "2025-08-01",
+                end: "2025-10-31",
+                achievement: "Project governance is established, key delivery partners are secured, and all critical procurement is initiated.",
+                schedule: [
+                    { task: "Governance framework and delivery team formalised", durationWeeks: 4 },
+                    { task: "Technical specifications completed for all major components", durationWeeks: 6 },
+                    { task: "MeRFB procurement initiated (10-month lead time)", durationWeeks: 2 },
+                    { task: "Community engagement team mobilised; local participant mapping begins", durationWeeks: 8 },
+                    { task: "Initial council and stakeholder briefing held", durationWeeks: 2 },
+                    { task: "Preliminary risk register and mitigation plan developed", durationWeeks: 4 }
+                ],
+                elaborationText: "This \"Project Setup and Governance\" milestone is pivotal, moving the initiative from conceptualization to a formally structured, actionable phase. It establishes the foundational pillars: a clear governance framework, securing critical human resources (delivery team, community engagement) and key external partners, and initiating procurement for long-lead items like the 10-month MeRFB. Potential challenges include managing the significant MeRFB lead time to prevent overall schedule delays, ensuring robust community and stakeholder buy-in amidst diverse expectations, and refining the preliminary risk register. Broader implications involve securing the project's social license through early engagement, setting the definitive pace for future phases based on procurement timelines, and providing the robust organizational and strategic bedrock necessary for successful, controlled project execution.",
+                risks: [
+                    { description: "Higher than anticipated capital expenditure (CAPEX) or operational expenditure (OPEX).", mitigation: "The estimated total installed capital cost for the 9 MWh battery system is approximately $4,275,000. The total capital expenditure for the GEN pilot station is projected at AUD $6.06 million, with annual OPEX forecast at approximately AUD $594,800. These figures provide a baseline for cost control and monitoring." },
+                    { description: "Changes in Australian energy policy or market rules impacting project viability.", mitigation: "The project's experience will inform policymakers on pathways to streamline regulations for distributed energy. Engagement with regulators and policymakers is a key responsibility of Future Habitats to ensure regulatory alignment and inform future frameworks for mutual energy systems." }
+                ]
+            },
+            {
+                id: 2,
+                name: "Community Engagement and Co-Design",
+                phase: "Design & Build",
+                start: "2025-10-01",
+                end: "2026-01-31",
+                achievement: "Participant recruitment, onboarding, and literacy-building are underway alongside regulatory and physical site preparation.",
+                schedule: [
+                    { task: "Early engagement of 100–200 pilot participants", durationWeeks: 6 },
+                    { task: "Co-design workshops completed for dashboards and user interface", durationWeeks: 4 },
+                    { task: "Grid connection and DNSP applications submitted", durationWeeks: 8 },
+                    { task: "Site preparation (civil works, trenching, pad construction) underway", durationWeeks: 10 },
+                    { task: "Smart meter rollout plan finalised", durationWeeks: 4 },
+                    { task: "Monthly engagement pulse checks initiated", durationWeeks: 2 },
+                    { task: "Regulatory risks actively monitored and updated", durationWeeks: 2 }
+                ],
+                elaborationText: "This milestone signifies a critical pivot from planning to active implementation, simultaneously building both technical and human foundations. Engaging 100-200 pilot participants and fostering their digital literacy is crucial for user adoption, ensuring the co-designed dashboards truly meet their needs. Key challenges include maintaining high engagement, effectively synthesising diverse co-design feedback, and navigating potential delays in regulatory approvals or unforeseen site conditions during civil works. The concurrent submission of grid connection applications and extensive site preparation lays essential infrastructure groundwork. Broader implications highlight that successful user-centric design and seamless infrastructure integration during this pilot phase are foundational for the project's future scalability, overall impact, and long-term viability. Proactive regulatory monitoring mitigates significant future compliance risks.",
+                risks: [
+                    { description: "Lack of community acceptance or participation in the Mutual Energy Aggregator (MEA) model.", mitigation: "Each MEA is established as a democratically governed association under mutual enterprise principles, ensuring inclusive participation and transparent decision-making. Future Habitats leads community engagement, onboarding local participants, and ensuring the system reflects local values and needs, which is essential to securing trust and social licence." },
+                    { description: "Governance challenges within the community-owned and controlled Small Energy Aggregator (SRA) structure.", mitigation: "The model adopts a hybrid approach where a Neighbourhood Mutual Ltd retains control of PV assets, governance, member engagement, policy-setting, and reinvestment, while a licensed Company Ltd (SPV/SER) is contracted to perform all operational, regulatory, and compliance functions. This allows community ownership and control over strategic direction while offloading administrative, legal, and technical compliance risks to professional operators." },
+                    { description: "Difficulty in training and upskilling local communities for new job opportunities.", mitigation: "The model supports 15-20 skilled local jobs per mutual in installation, maintenance, and administration. FASTLab will develop fee-based online and in-person training programs, governance playbooks, and tech onboarding toolkits to enable mutual self-governance and system literacy." },
+                    { description: "Regulatory ambiguity or hurdles for operating a grid-connected battery that can form an island during outages.", mitigation: "The GEN project is an ideal candidate for the AER's Innovation Enquiry Service (IES), where the proponent can receive tailored regulatory guidance and potentially pursue a sandbox trial if current rules impede the concept. Engagement with the IES can clarify licensing or approvals needed to run a grid-connected battery that can form an island during outages." }
+                ]
+            },
+            {
+                id: 3,
+                name: "VEN Simulations & Platform Build",
+                phase: "Design & Build",
+                start: "2025-12-01",
+                end: "2026-04-30",
+                achievement: "Simulated peer-to-peer trading and user testing validate digital systems; major infrastructure nearing completion.",
+                schedule: [
+                    { task: "IoT sensors and smart meters installed", durationWeeks: 8 },
+                    { task: "HSaiC platform and user dashboards configured and tested", durationWeeks: 12 },
+                    { task: "VEN simulation trials completed with early adopters", durationWeeks: 6 },
+                    { task: "Rooftop solar PV and substation infrastructure completed", durationWeeks: 10 },
+                    { task: "Technical integration validated across systems", durationWeeks: 4 },
+                    { task: "Investor and council and stakeholder progress briefing held", durationWeeks: 2 },
+                    { task: "Platform performance and interface risks assessed", durationWeeks: 4 }
+                ],
+                elaborationText: "This milestone represents a pivotal transition from conceptual design to near-operational readiness for the Virtual Energy Network. Successful simulation of peer-to-peer trading and user testing validates the core digital market mechanisms and user experience, crucial for future adoption. Concurrently, the nearing completion of major physical infrastructure like rooftop solar PV and substation works establishes the essential energy assets, demonstrating tangible progress. Key challenges include ensuring seamless technical integration across diverse IoT sensors, energy infrastructure, and the HSaiC platform, managing complex data flows, and accurately simulating real-world energy dynamics. Rigorous risk assessment and maintaining strong stakeholder alignment through briefings are vital. Successfully achieving this de-risks future deployment, proving the viability of a decentralized energy market and paving the way for a real-world pilot launch and broader energy transformation.",
+                risks: [
+                    { description: "MeRFB energy density not meeting target of 50 Wh/L in real-world conditions.", mitigation: "The GEN project is explicitly working to bridge the gap between current demonstrations and the aggressive 50 Wh/L target, seeking quantitative validation of Allegro's specific performance at this scale in a real-world operational environment. This validation is critical for de-risking future large-scale deployments." },
+                    { description: "MeRFB current density not consistently achieving 200 mA cm² without compromising efficiency or stability.", mitigation: "The GEN project will focus on achieving and validating consistent operation at the 200 mA cm² target without compromising efficiency or stability across the MeRFB chemistry. This validation will provide crucial data for optimizing stack design for future large-scale applications." },
+                    { description: "Integration challenges between MeRFB, grid-forming inverters, and the Energy Management System (EMS).", mitigation: "The GEN project integrates cutting-edge technologies to actively optimize network performance and resilience. The EMS will oversee the entire energy flow, optimizing battery operation and integrating with the Battery Management System (BMS). Utilize specialized software developers and technology vendors, such as Euristiq and ITRex Group, for integration and custom EMS development. Create a digital twin simulation environment to perform \"what-if\" scenario analyses and test control strategies in a risk-free environment." },
+                    { description: "Thermal management system (TMS) issues affecting MeRFB performance or longevity.", mitigation: "A sophisticated, active thermal management system (TMS) is required to maintain optimal electrolyte temperatures and prevent localized hot spots within the cell stacks. The successful implementation of this system will provide a validated thermal management strategy for future large-scale MeRFB deployments." },
+                    { description: "Cybersecurity threats to the energy management platform and critical infrastructure.", mitigation: "The EMP will employ end-to-end encryption (TLS) for data in transit, strict authentication/authorization (zero-trust architecture), and continuous monitoring for anomalies. NVIDIA's Morpheus AI cybersecurity framework will be evaluated for deployment to analyze network telemetry in real-time and detect threats." }
+                ]
+            },
+            {
+                id: 4,
+                name: "System Integration & Shadow Ops",
+                phase: "Integration",
+                start: "2026-05-01",
+                end: "2026-07-31",
+                achievement: "The battery is delivered and installed. A shadow operations phase is run to test the system under live conditions.",
+                schedule: [
+                    { task: "MeRFB delivered, installed, and tested", durationWeeks: 8 },
+                    { task: "Site Acceptance Tests (SAT) for full system completed", durationWeeks: 4 },
+                    { task: "Beta cohort runs live interface and energy flow trials", durationWeeks: 6 },
+                    { task: "Support protocols, alerts, and usage data monitored", durationWeeks: 4 },
+                    { task: "Targeted community training delivered (e.g. “how to use your dashboard”)", durationWeeks: 3 },
+                    { task: "Pre-commissioning risk audit completed", durationWeeks: 2 }
+                ],
+                elaborationText: "The \"System Integration & Shadow Ops\" milestone is pivotal, transitioning from hardware installation to real-world operational validation. Contextually, this phase rigorously tests the entire integrated solution—MeRFB battery, control systems, and user interfaces—under live conditions with a controlled beta cohort. This de-risks the full public launch by identifying and resolving issues proactively. Potential challenges include unforeseen integration complexities between the battery and site infrastructure, ensuring robust data collection for performance monitoring, and managing real-time feedback from the beta users. Securing seamless energy flow and a user-friendly interface during trials is critical. Broader implications are significant: successful shadow operations validate the system's technical viability and energy efficiency, provide crucial data for optimization, build trust within the community via effective training, and ensure all safety and regulatory requirements are met via the pre-commissioning audit. This milestone lays the essential groundwork for successful, full-scale deployment.",
+                risks: [
+                    { description: "Integration challenges between MeRFB, grid-forming inverters, and the Energy Management System (EMS).", mitigation: "The GEN project integrates cutting-edge technologies to actively optimize network performance and resilience. The EMS will oversee the entire energy flow, optimizing battery operation and integrating with the Battery Management System (BMS). Utilize specialized software developers and technology vendors, such as Euristiq and ITRex Group, for integration and custom EMS development. Create a digital twin simulation environment to perform \"what-if\" scenario analyses and test control strategies in a risk-free environment." },
+                    { description: "Thermal management system (TMS) issues affecting MeRFB performance or longevity.", mitigation: "A sophisticated, active thermal management system (TMS) is required to maintain optimal electrolyte temperatures and prevent localized hot spots within the cell stacks. The successful implementation of this system will provide a validated thermal management strategy for future large-scale MeRFB deployments." },
+                    { description: "Difficulty in meeting National Electricity Market (NEM) Generator Performance Standards (GPS) for grid-forming inverters.", mitigation: "The project needs to negotiate a Connection Agreement with the DNSP and seek AEMO's input, proposing performance levels for each requirement in Schedule 5.2 of the NER. Early engagement with AEMO and DNSPs allows discussion of control modes and tuning so that the battery's advanced features can be accommodated within existing standards." },
+                    { description: "Challenges in coordinating protection schemes with the DNSP for intentional islanding operation.", mitigation: "Intentional islanding requires explicit agreements and control schemes with the DNSP. The substation connection would need to include an automatic islanding/isolation scheme. The battery's BMS and inverter must then manage voltage and frequency within that island until the grid returns, at which point synchronization and resynchronization controls are vital. Detailed studies and test procedures will be required by the DNSP." },
+                    { description: "Inefficient energy flow management leading to suboptimal battery utilization or increased grid strain.", mitigation: "A comprehensive EMS will oversee the entire energy flow, maximizing economic value through energy arbitrage and demand response programs, strategically storing energy during off-peak periods and discharging during peak demand. The EMS will also enhance grid stability and resilience by providing ancillary services and managing local supply-demand balance." }
+                ]
+            },
+            {
+                id: 5,
+                name: "Go-Live & Operational Handover",
+                phase: "Integration",
+                start: "2026-08-01",
+                end: "2026-10-31",
+                achievement: "GEN Hamilton North is live, operating in phases. Early data is being collected and participants are engaged.",
+                schedule: [
+                    { task: "Full “wet” commissioning complete", durationWeeks: 4 },
+                    { task: "Peer-to-peer platform launched in staged zones/phases", durationWeeks: 6 },
+                    { task: "First 600+ participants live and transacting", durationWeeks: 8 },
+                    { task: "Operational analytics dashboard launched", durationWeeks: 2 },
+                    { task: "First revenue and value-tracking reports produced", durationWeeks: 2 },
+                    { task: "Ongoing performance and usage risks logged and reviewed", durationWeeks: 2 }
+                ],
+                elaborationText: "This Go-Live & Operational Handover marks GEN Hamilton North's critical transition from development to live, phased operation. The \"wet\" commissioning indicates a robust, tangible system, while initial participant engagement and data collection validate the peer-to-peer platform's core functionality and real-world viability. Key challenges include ensuring seamless scalability as participant numbers grow, managing potential technical issues post-commissioning, and maintaining data integrity for the new analytics dashboard and revenue reports. Broader implications involve proving the project's return on investment through early value-tracking, establishing a foundation for future expansion, and fostering a culture of continuous improvement through ongoing risk management and performance reviews. This milestone sets the stage for sustained operational excellence and user satisfaction.",
+                risks: [
+                    { description: "Delays or issues in AEMO registration as an Integrated Resource Provider (IRP) or Small Resource Aggregator (SRA).", mitigation: "The project should apply to register as an Integrated Resource Provider (IRP), demonstrating capability to comply with scheduling, communications, and other market participation rules to AEMO. If the battery is part of an aggregated DER portfolio, the aggregator would register as an IRP-Small Resource Aggregator." },
+                    { description: "Underutilization of rooftop solar PV capacity due to lack of local storage or coordination.", mitigation: "GEN will integrate up to 4.9 MW of solar generation, primarily sourced from existing residential rooftop PV, combining this with shared battery storage and local coordination to address excess energy being exported or wasted. This optimization increases the usable output of existing solar systems by up to 50 percent." },
+                    { description: "Inefficient energy flow management leading to suboptimal battery utilization or increased grid strain.", mitigation: "A comprehensive EMS will oversee the entire energy flow, maximizing economic value through energy arbitrage and demand response programs, strategically storing energy during off-peak periods and discharging during peak demand. The EMS will also enhance grid stability and resilience by providing ancillary services and managing local supply-demand balance." },
+                    { description: "Cybersecurity threats to the energy management platform and critical infrastructure.", mitigation: "The EMP will employ end-to-end encryption (TLS) for data in transit, strict authentication/authorization (zero-trust architecture), and continuous monitoring for anomalies. NVIDIA's Morpheus AI cybersecurity framework will be evaluated for deployment to analyze network telemetry in real-time and detect threats." },
+                    { description: "Lower than projected annual revenue from direct electricity sales or ancillary services.", mitigation: "The project is expected to generate approximately 7.3 GWh of electricity annually, translating to estimated gross annual revenue of AUD $1.64 million, with net annual revenue forecast at approximately AUD $1.52 million after operating costs. This direct electricity sales model within a Virtual Embedded Network at an anticipated customer tariff of 22.5 cents per kilowatt-hour avoids reliance on volatile wholesale markets." }
+                ]
+            },
+            {
+                id: 6,
+                name: "Optimisation & GEN #2 Planning",
+                phase: "Expansion",
+                start: "2027-02-01",
+                end: "2027-07-31",
+                achievement: "The system is optimised using real-world data. A refined and de-risked plan for GEN #2 is complete and validated.",
+                schedule: [
+                    { task: "Participant base expanded to 800–1,000", durationWeeks: 12 },
+                    { task: "Year 1 performance evaluation complete", durationWeeks: 4 },
+                    { task: "Optimised control logic and pricing signals deployed", durationWeeks: 8 },
+                    { task: "GEN #2 replication strategy finalised: technical, financial, regulatory", durationWeeks: 10 },
+                    { task: "Community consultation for GEN #2 begins", durationWeeks: 4 },
+                    { task: "Stakeholder feedback loop integrated into design", durationWeeks: 4 }
+                ],
+                elaborationText: "This milestone is pivotal, signifying the project's transition from initial deployment (implied GEN #1) to scalable expansion. Optimising the system with real-world data aims to refine efficiency and functionality, using insights from a growing participant base (800-1000) to enhance control logic and pricing signals. Challenges include effectively onboarding new participants within 12 weeks, ensuring data quality for robust optimisation, and navigating the complexities of finalising a de-risked GEN #2 replication strategy across technical, financial, and regulatory fronts. Successful community consultation and integrating diverse stakeholder feedback are crucial but can be time-consuming. Broader implications involve proving the system's scalability, economic viability, and social acceptance for future generations. A successful GEN #2 plan can establish a blueprint for wider adoption, potentially setting industry standards and demonstrating a sustainable model for future growth and impact.",
+                risks: [
+                    { description: "Insufficient financial surplus for reinvestment into additional projects as planned.", mitigation: "A core commitment of the GEN project is to reinvest its financial surplus to drive further expansion. Up to 80% of the annual surplus can be reinvested into new systems, funding 65-85 additional household installations per mutual per year. This robust reinvestment engine, fueled by an estimated $1.3 million surplus per mutual annually, allows the project to develop at least one additional project within the first four years." },
+                    { description: "Lack of community acceptance or participation in the Mutual Energy Aggregator (MEA) model.", mitigation: "Each MEA is established as a democratically governed association under mutual enterprise principles, ensuring inclusive participation and transparent decision-making. Future Habitats leads community engagement, onboarding local participants, and ensuring the system reflects local values and needs, which is essential to securing trust and social licence." },
+                    { description: "Governance challenges within the community-owned and controlled Small Energy Aggregator (SRA) structure.", mitigation: "The model adopts a hybrid approach where a Neighbourhood Mutual Ltd retains control of PV assets, governance, member engagement, policy-setting, and reinvestment, while a licensed Company Ltd (SPV/SER) is contracted to perform all operational, regulatory, and compliance functions. This allows community ownership and control over strategic direction while offloading administrative, legal, and technical compliance risks to professional operators." },
+                    { description: "Competition from alternative long-duration energy storage (LDES) technologies.", mitigation: "MeRFBs offer unique advantages in enhanced safety, exceptional longevity, scalability, modularity, and sustainability. Allegro Energy reports the \"lowest levelised cost of storage (LCOS)\" and indicates their technology can be \"up to 90% cheaper than competitors\"." }
+                ]
+            },
+            {
+                id: 7,
+                name: "GEN #2 Implementation & Full Handover",
+                phase: "Expansion",
+                start: "2027-08-01",
+                end: "2029-01-31",
+                achievement: "Hamilton North transitions to full local ownership. GEN #2 is underway using templates and lessons from the pilot.",
+                schedule: [
+                    { task: "GEN #2 deployment initiated with mutual structure in place", durationWeeks: 16 },
+                    { task: "Hamilton North operations formally transferred to the local mutual", durationWeeks: 8 },
+                    { task: "Final outcomes report, replication toolkit, and investment case published", durationWeeks: 12 },
+                    { task: "GEN #2 training and capacity-building sessions conducted", durationWeeks: 6 },
+                    { task: "Long-term risk management and asset monitoring plan embedded", durationWeeks: 8 }
+                ],
+                elaborationText: "This milestone signifies a crucial pivot from pilot success to scalable replication and true local empowerment. It involves the full deployment of the GEN #2 model in Hamilton North, leveraging established templates and lessons learned from a previous pilot, while simultaneously transitioning all operational responsibilities to the local mutual. Key challenges include ensuring robust capacity building within the local mutual for effective self-management, financial sustainability, and long-term risk oversight. Adapting the GEN #2 deployment templates to the specific Hamilton North context and maintaining project momentum across the extended implementation periods will also be critical. The broader implications are substantial: successful handover validates the GEN model's replicability, creating a proven framework (\"replication toolkit\" and \"investment case\") for future expansions. It fosters genuine local ownership and resilience, paving the way for widespread, sustainable community-led development initiatives beyond the initial project scope.",
+                risks: [
+                    { description: "Difficulty in training and upskilling local communities for new job opportunities.", mitigation: "The model supports 15-20 skilled local jobs per mutual in installation, maintenance, and administration. FASTLab will develop fee-based online and in-person training programs, governance playbooks, and tech onboarding toolkits to enable mutual self-governance and system literacy." },
+                    { description: "Insufficient financial surplus for reinvestment into additional projects as planned.", mitigation: "A core commitment of the GEN project is to reinvest its financial surplus to drive further expansion. Up to 80% of the annual surplus can be reinvested into new systems, funding 65-85 additional household installations per mutual per year. This robust reinvestment engine, fueled by an estimated $1.3 million surplus per mutual annually, allows the project to develop at least one additional project within the first four years." },
+                    { description: "Unforeseen external events (e.g., natural disasters, global supply chain disruptions).", mitigation: "The system will provide up to 37 hours of continuous electricity during outages or when grid support is needed, including the critical capability to operate in island mode, supporting local grid segments autonomously from the main grid during outages. This enhances local energy security and resilience." }
+                ]
+            }
+        ];
+
+        const phaseColors = {
+            "Setup": "bg-blue-400",
+            "Design & Build": "bg-purple-400",
+            "Integration": "bg-emerald-400",
+            "Expansion": "bg-orange-400"
+        };
+        
+        const phaseBorders = {
+            "Setup": "border-blue-700",
+            "Design & Build": "border-purple-700",
+            "Integration": "border-emerald-700",
+            "Expansion": "border-orange-700"
+        };
+
+        const ganttStartDate = new Date("2025-07-01");
+        const ganttEndDate = new Date("2029-02-28");
+        let activeMilestoneId = null;
+        let activePhase = 'All';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            setupGanttChart();
+            renderMilestones();
+            setupPhaseButtons();
+            updateDetails(milestonesData[0].id);
+            setupLLMButtons();
+        });
+
+        function getQuarters(start, end) {
+            let currentDate = new Date(start);
+            currentDate.setDate(1);
+            const quarters = [];
+            while (currentDate <= end) {
+                const year = currentDate.getFullYear();
+                const quarter = Math.floor(currentDate.getMonth() / 3) + 1;
+                quarters.push(`${year} Q${quarter}`);
+                currentDate.setMonth(currentDate.getMonth() + 3);
+            }
+            return quarters;
+        }
+
+        function setupGanttChart() {
+            const headerContainer = document.getElementById('gantt-chart-header');
+            const labelsContainer = document.getElementById('gantt-labels');
+            
+            const quarters = getQuarters(ganttStartDate, ganttEndDate);
+            headerContainer.style.gridTemplateColumns = `repeat(${quarters.length}, minmax(100px, 1fr))`;
+            document.getElementById('gantt-chart-container').style.gridTemplateColumns = `repeat(${quarters.length}, minmax(100px, 1fr))`;
+
+            quarters.forEach(q => {
+                const headerCell = document.createElement('div');
+                headerCell.className = 'text-xs text-center font-semibold text-gray-500 p-2 border-b border-r border-gray-200';
+                headerCell.textContent = q;
+                headerContainer.appendChild(headerCell);
+            });
+            
+            const uniquePhases = [...new Set(milestonesData.map(m => m.phase))];
+            labelsContainer.innerHTML = '';
+            uniquePhases.forEach(phase => {
+                const labelDiv = document.createElement('div');
+                labelDiv.className = 'h-20 flex items-center justify-start p-2 font-medium text-gray-600';
+                labelDiv.textContent = phase;
+                labelsContainer.appendChild(labelDiv);
+            });
+        }
+
+        function renderMilestones() {
+            const chartContainer = document.getElementById('gantt-chart-container');
+            chartContainer.innerHTML = '';
+            const uniquePhases = [...new Set(milestonesData.map(m => m.phase))];
+            
+            milestonesData.forEach(milestone => {
+                if (activePhase !== 'All' && milestone.phase !== activePhase) return;
+
+                const start = new Date(milestone.start);
+                const end = new Date(milestone.end);
+
+                const totalDays = (ganttEndDate - ganttStartDate) / (1000 * 60 * 60 * 24);
+                const startOffset = (start - ganttStartDate) / (1000 * 60 * 60 * 24);
+                const duration = (end - start) / (1000 * 60 * 60 * 24);
+
+                const startPercent = (startOffset / totalDays) * 100;
+                const widthPercent = (duration / totalDays) * 100;
+
+                const bar = document.createElement('div');
+                bar.className = `gantt-bar relative flex items-center h-12 my-4 rounded-lg text-white text-xs font-semibold p-2 overflow-hidden ${phaseColors[milestone.phase]} border-l-4 ${phaseBorders[milestone.phase]}`;
+                bar.style.position = 'absolute';
+                bar.style.left = `${startPercent}%`;
+                bar.style.width = `${widthPercent}%`;
+                bar.style.top = `${uniquePhases.indexOf(milestone.phase) * 80}px`;
+                bar.dataset.id = milestone.id;
+                
+                const barText = document.createElement('span');
+                barText.className = 'truncate';
+                barText.textContent = milestone.name;
+                bar.appendChild(barText);
+
+                bar.onclick = () => updateDetails(milestone.id);
+
+                chartContainer.appendChild(bar);
+            });
+
+            updateActiveBar();
+            addCurrentDateMarker();
+        }
+
+        function addCurrentDateMarker() {
+            const chartContainer = document.getElementById('gantt-chart-container');
+            const today = new Date();
+            const existingMarker = chartContainer.querySelector('.timeline-marker');
+            if (existingMarker) {
+                existingMarker.remove();
+            }
+
+            if (today >= ganttStartDate && today <= ganttEndDate) {
+                const totalDays = (ganttEndDate - ganttStartDate) / (1000 * 60 * 60 * 24);
+                const startOffset = (today - ganttStartDate) / (1000 * 60 * 60 * 24);
+                const startPercent = (startOffset / totalDays) * 100;
+
+                const marker = document.createElement('div');
+                marker.className = 'timeline-marker';
+                marker.style.left = `${startPercent}%`;
+                
+                const label = document.createElement('div');
+                label.className = 'timeline-label';
+                label.textContent = 'Today';
+                marker.appendChild(label);
+
+                chartContainer.appendChild(marker);
+            }
+        }
+
+        function updateDetails(id) {
+            const milestone = milestonesData.find(m => m.id === id);
+            if (!milestone) return;
+            
+            activeMilestoneId = id;
+
+            document.getElementById('milestone-details-content').classList.remove('hidden');
+            document.getElementById('milestone-placeholder').classList.add('hidden');
+
+            document.getElementById('details-title').textContent = milestone.name;
+            const startDate = new Date(milestone.start).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+            const endDate = new Date(milestone.end).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+            document.getElementById('details-dates').textContent = `Duration: ${startDate} – ${endDate}`;
+            document.getElementById('details-achievement').textContent = milestone.achievement;
+            
+            const activitiesList = document.getElementById('details-activities');
+            activitiesList.innerHTML = '';
+            const activitiesScheduleTitle = document.getElementById('activities-schedule-title');
+            activitiesScheduleTitle.textContent = 'Detailed Schedule';
+
+            if (milestone.schedule) {
+                milestone.schedule.forEach(item => {
+                    const li = document.createElement('li');
+                    li.textContent = `${item.task} (Est. ${item.durationWeeks} weeks)`;
+                    activitiesList.appendChild(li);
+                });
+            } else if (milestone.activities) {
+                milestone.activities.forEach(activity => {
+                    const li = document.createElement('li');
+                    li.textContent = activity;
+                    activitiesList.appendChild(li);
+                });
+            }
+
+            document.getElementById('llm-output-text').textContent = '';
+            document.getElementById('llm-output-container').classList.add('hidden');
+            document.getElementById('llm-loading-indicator').classList.add('hidden');
+
+            updateActiveBar();
+        }
+
+        function updateActiveBar() {
+            document.querySelectorAll('.gantt-bar').forEach(bar => {
+                if (parseInt(bar.dataset.id) === activeMilestoneId) {
+                    bar.classList.add('active');
+                    bar.style.setProperty('--active-border-color', phaseBorders[milestonesData.find(m => m.id === activeMilestoneId).phase]);
+                } else {
+                    bar.classList.remove('active');
+                }
+            });
+        }
+        
+        function setupPhaseButtons() {
+            const buttons = document.querySelectorAll('.phase-btn');
+            buttons.forEach(button => {
+                button.addEventListener('click', () => {
+                    activePhase = button.dataset.phase;
+                    buttons.forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    renderMilestones();
+                });
+            });
+            buttons[0].classList.add('active');
+        }
+
+        function setupLLMButtons() {
+            document.getElementById('elaborate-milestone-btn').addEventListener('click', () => callLLMForMilestone('elaborate'));
+            document.getElementById('identify-risks-btn').addEventListener('click', () => callLLMForMilestone('risks'));
+        }
+
+        async function callLLMForMilestone(type) {
+            const milestone = milestonesData.find(m => m.id === activeMilestoneId);
+            if (!milestone) {
+                document.getElementById('llm-output-text').textContent = 'Please select a milestone first.';
+                document.getElementById('llm-output-container').classList.remove('hidden');
+                return;
+            }
+
+            const llmOutputText = document.getElementById('llm-output-text');
+            const llmLoadingIndicator = document.getElementById('llm-loading-indicator');
+            const llmOutputContainer = document.getElementById('llm-output-container');
+
+            llmOutputText.textContent = '';
+            llmOutputContainer.classList.remove('hidden');
+            llmLoadingIndicator.classList.remove('hidden');
+
+            if (type === 'elaborate' && milestone.elaborationText) {
+                llmOutputText.textContent = milestone.elaborationText;
+                llmLoadingIndicator.classList.add('hidden');
+                return;
+            }
+
+            if (type === 'risks' && milestone.risks && milestone.risks.length > 0) {
+                let risksHtml = '<h4 class="font-semibold text-gray-800 mb-2">Identified Risks & Mitigations:</h4><ul class="list-disc list-inside space-y-2 text-gray-600 pl-4">';
+                milestone.risks.forEach(risk => {
+                    risksHtml += `<li><strong>${risk.description}</strong><br><em>Mitigation:</em> ${risk.mitigation}</li>`;
+                });
+                risksHtml += '</ul>';
+                llmOutputText.innerHTML = risksHtml;
+                llmLoadingIndicator.classList.add('hidden');
+                return;
+            }
+
+            let prompt = "";
+            let activitiesString = "";
+            if (milestone.schedule) {
+                activitiesString = milestone.schedule.map(s => `${s.task} (Est. ${s.durationWeeks} weeks)`).join('; ');
+            } else if (milestone.activities) {
+                activitiesString = milestone.activities.join('; ');
+            }
+
+            if (type === 'elaborate') {
+                prompt = `Elaborate on the following project milestone. Focus on providing additional context, potential challenges, or broader implications based on the provided achievement and key activities. Keep the response concise and informative, around 100-150 words.\n\nMilestone: ${milestone.name}\nPlanned Achievement: ${milestone.achievement}\nKey Activities: ${activitiesString}`;
+            } else if (type === 'risks') {
+                prompt = `Based on the following project milestone details, identify potential risks and suggest high-level mitigation strategies. Present the risks as bullet points, each with a brief mitigation suggestion. Focus on common project management risks (e.g., resource, technical, external dependencies, scope, schedule, budget). Aim for 3-5 distinct risks.\n\nMilestone: ${milestone.name}\nPlanned Achievement: ${milestone.achievement}\nKey Activities: ${activitiesString}`;
+            }
+
+            let chatHistory = [];
+            chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+            const payload = { contents: chatHistory };
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+            let response;
+            let retries = 0;
+            const maxRetries = 5;
+            const baseDelay = 1000;
+
+            while (retries < maxRetries) {
+                try {
+                    response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.ok) {
+                        break;
+                    } else if (response.status === 429) {
+                        const delay = baseDelay * Math.pow(2, retries);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        retries++;
+                    } else {
+                        throw new Error(`API error: ${response.status} ${response.statusText}`);
+                    }
+                } catch (error) {
+                    llmOutputText.textContent = `Error: ${error.message}`;
+                    llmLoadingIndicator.classList.add('hidden');
+                    return;
+                }
+            }
+
+            if (!response || !response.ok) {
+                llmOutputText.textContent = 'Failed to get a response from the AI after multiple retries. Please try again later.';
+                llmLoadingIndicator.classList.add('hidden');
+                return;
+            }
+
+            try {
+                const result = await response.json();
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const text = result.candidates[0].content.parts[0].text;
+                    llmOutputText.textContent = text;
+                } else {
+                    llmOutputText.textContent = 'No content received from the AI.';
+                }
+            } catch (parseError) {
+                llmOutputText.textContent = `Error parsing AI response: ${parseError.message}`;
+            } finally {
+                llmLoadingIndicator.classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
